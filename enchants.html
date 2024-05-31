@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PS99 Info</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+        .enchant {
+            background-color: #fff;
+            margin: 10px 0;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+        }
+        .enchant img {
+            width: 50px;
+            height: 50px;
+            margin-right: 20px;
+        }
+        .enchant h2 {
+            margin: 0 0 10px;
+        }
+        #search-bar {
+            margin-bottom: 20px;
+            padding: 10px;
+            font-size: 16px;
+            width: 100%;
+            max-width: 600px;
+            display: block;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .tier-details {
+            display: none;
+            margin-left: 70px;
+        }
+        .tier-details img {
+            width: 30px;
+            height: 30px;
+            margin-right: 10px;
+            vertical-align: middle;
+        }
+        .tier-details p {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>PS99 Info</h1>
+    <input type="text" id="search-bar" placeholder="Search for enchants...">
+    <div id="enchants-container"></div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            let enchantsData = [];
+            const enchantsContainer = document.getElementById('enchants-container');
+            const searchBar = document.getElementById('search-bar');
+
+            fetch('https://biggamesapi.io/api/collection/enchants')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'ok' && Array.isArray(data.data)) {
+                        enchantsData = data.data;
+                        displayEnchants(enchantsData);
+                    } else {
+                        console.error('Unexpected API response structure:', data);
+                    }
+                })
+                .catch(error => console.error('Error fetching enchants:', error));
+
+            searchBar.addEventListener('input', (e) => {
+                const query = e.target.value.toLowerCase();
+                const filteredEnchants = enchantsData.filter(enchant =>
+                    enchant.configName.toLowerCase().includes(query)
+                );
+                displayEnchants(filteredEnchants);
+            });
+
+            function fetchIconUrl(iconId) {
+                return fetch(`https://cors-anywhere.herokuapp.com/https://thumbnails.roblox.com/v1/assets?assetIds=${iconId}&returnPolicy=PlaceHolder&size=50x50&format=Png&isCircular=false`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.data && data.data.length > 0) {
+                            return data.data[0].imageUrl;
+                        }
+                        return null;
+                    })
+                    .catch(error => {
+                        console.error('Error fetching icon URL:', error);
+                        return null;
+                    });
+            }
+
+            async function displayEnchants(enchants) {
+                enchantsContainer.innerHTML = '';
+                for (const enchant of enchants) {
+                    const highestTier = enchant.configData.Tiers.reduce((maxTier, currentTier) => {
+                        return currentTier.Rarity.RarityNumber > maxTier.Rarity.RarityNumber ? currentTier : maxTier;
+                    }, enchant.configData.Tiers[0]);
+
+                    const highestTierIconId = highestTier.Icon.match(/\d+/)[0];
+                    const highestTierIconUrl = await fetchIconUrl(highestTierIconId);
+
+                    const enchantElement = document.createElement('div');
+                    enchantElement.className = 'enchant';
+                    enchantElement.innerHTML = `
+                        <img src="${highestTierIconUrl}" alt="Icon">
+                        <div>
+                            <h2>${enchant.configName}</h2>
+                            <p>Diminish Power Threshold: ${enchant.configData.DiminishPowerThreshold}</p>
+                            <div class="tier-details">
+                                ${await Promise.all(enchant.configData.Tiers.map(async tier => {
+                                    const tierIconId = tier.Icon.match(/\d+/)[0];
+                                    const tierIconUrl = await fetchIconUrl(tierIconId);
+                                    const maxSimultaneousUse = Math.ceil(enchant.configData.DiminishPowerThreshold / tier.Power);
+                                    return `
+                                        <p>
+                                            <img src="${tierIconUrl}" alt="Tier Icon">
+                                            Tier: ${tier.DisplayName}, Power: ${tier.Power}, Max Simultaneous Use: ${maxSimultaneousUse}
+                                        </p>
+                                    `;
+                                }))}
+                            </div>
+                        </div>
+                    `;
+                    enchantElement.addEventListener('click', () => {
+                        const tierDetails = enchantElement.querySelector('.tier-details');
+                        tierDetails.style.display = tierDetails.style.display === 'block' ? 'none' : 'block';
+                    });
+                    enchantsContainer.appendChild(enchantElement);
+                }
+            }
+        });
+    </script>
+</body>
+</html>
